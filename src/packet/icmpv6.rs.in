@@ -146,7 +146,6 @@ pub mod ndp {
     //!
     //! [RFC 4861]: https://tools.ietf.org/html/rfc4861
 
-    use packet::icmpv6::{Icmpv6Code, Icmpv6Type};
     use packet::{PrimitiveValues, Packet};
     use pnet_macros_support::types::*;
     use std::net::Ipv6Addr;
@@ -309,11 +308,6 @@ pub mod ndp {
     /// [RFC 4861 § 4.1]: https://tools.ietf.org/html/rfc4861#section-4.1
     #[packet]
     pub struct RouterSolicit {
-        #[construct_with(u8)]
-        pub icmpv6_type: Icmpv6Type,
-        #[construct_with(u8)]
-        pub icmpv6_code: Icmpv6Code,
-        pub checksum: u16be,
         pub reserved: u32be,
         #[length_fn = "rs_ndp_options_length"]
         pub options: Vec<NdpOption>,
@@ -324,8 +318,8 @@ pub mod ndp {
 
     /// Router Solicit packet calculation for the length of the options.
     fn rs_ndp_options_length(pkt: &RouterSolicitPacket) -> usize {
-        if pkt.packet().len() > 8 {
-            pkt.packet().len() - 8
+        if pkt.packet().len() > 4 {
+            pkt.packet().len() - 4
         } else {
             0
         }
@@ -362,11 +356,6 @@ pub mod ndp {
     /// [RFC 4861 § 4.2]: https://tools.ietf.org/html/rfc4861#section-4.2
     #[packet]
     pub struct RouterAdvert {
-        #[construct_with(u8)]
-        pub icmpv6_type: Icmpv6Type,
-        #[construct_with(u8)]
-        pub icmpv6_code: Icmpv6Code,
-        pub checksum: u16be,
         pub hop_limit: u8,
         pub flags: u8,
         pub lifetime: u16be,
@@ -381,8 +370,8 @@ pub mod ndp {
 
     /// Router Advert packet calculation for the length of the options.
     fn ra_ndp_options_length(pkt: &RouterAdvertPacket) -> usize {
-        if pkt.packet().len() > 16 {
-            pkt.packet().len() - 16
+        if pkt.packet().len() > 12 {
+            pkt.packet().len() - 12
         } else {
             0
         }
@@ -411,11 +400,6 @@ pub mod ndp {
     /// [RFC 4861 § 4.3]: https://tools.ietf.org/html/rfc4861#section-4.3
     #[packet]
     pub struct NeighborSolicit {
-        #[construct_with(u8)]
-        pub icmpv6_type: Icmpv6Type,
-        #[construct_with(u8)]
-        pub icmpv6_code: Icmpv6Code,
-        pub checksum: u16be,
         pub reserved: u32be,
         #[construct_with(u16, u16, u16, u16, u16, u16, u16, u16)]
         pub target_addr: Ipv6Addr,
@@ -428,8 +412,8 @@ pub mod ndp {
 
     /// Neighbor Solicit packet calculation for the length of the options.
     fn ns_ndp_options_length(pkt: &NeighborSolicitPacket) -> usize {
-        if pkt.packet().len() > 24 {
-            pkt.packet().len() - 24
+        if pkt.packet().len() > 20 {
+            pkt.packet().len() - 20
         } else {
             0
         }
@@ -472,11 +456,6 @@ pub mod ndp {
     /// [RFC 4861 § 4.4]: https://tools.ietf.org/html/rfc4861#section-4.4
     #[packet]
     pub struct NeighborAdvert {
-        #[construct_with(u8)]
-        pub icmpv6_type: Icmpv6Type,
-        #[construct_with(u8)]
-        pub icmpv6_code: Icmpv6Code,
-        pub checksum: u16be,
         pub flags: u8,
         pub reserved: u24be,
         #[construct_with(u16, u16, u16, u16, u16, u16, u16, u16)]
@@ -528,11 +507,6 @@ pub mod ndp {
     /// [RFC 4861 § 4.5]: https://tools.ietf.org/html/rfc4861#section-4.5
     #[packet]
     pub struct Redirect {
-        #[construct_with(u8)]
-        pub icmpv6_type: Icmpv6Type,
-        #[construct_with(u8)]
-        pub icmpv6_code: Icmpv6Code,
-        pub checksum: u16be,
         pub reserved: u32be,
         #[construct_with(u16, u16, u16, u16, u16, u16, u16, u16)]
         pub target_addr: Ipv6Addr,
@@ -547,8 +521,8 @@ pub mod ndp {
 
     /// Redirect packet calculation for the length of the options.
     fn redirect_options_length(pkt: &RedirectPacket) -> usize {
-        if pkt.packet().len() > 40 {
-            pkt.packet().len() - 40
+        if pkt.packet().len() > 36 {
+            pkt.packet().len() - 36
         } else {
             0
         }
@@ -556,6 +530,7 @@ pub mod ndp {
 
     #[cfg(test)]
     mod ndp_tests {
+        use packet::icmpv6::{MutableIcmpv6Packet, Icmpv6Packet};
         use packet::icmpv6::{Icmpv6Types, Icmpv6Code};
         use super::*;
 
@@ -564,9 +539,8 @@ pub mod ndp {
             let mut data = vec![
                 0x02, 0x01, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
                 // Extra bytes to confuse the parsing
-                0x00, 0x00, 0x00
             ];
-            let pkg = MutableNdpOptionPacket::new(&mut data[..]).unwrap();
+            let pkg = NdpOptionPacket::new(&mut data[..]).unwrap();
             assert_eq!(pkg.get_option_type(), NdpOptionTypes::TargetLLAddr);
             assert_eq!(pkg.get_length(), 0x01);
             assert_eq!(pkg.payload().len(), 6);
@@ -580,38 +554,45 @@ pub mod ndp {
                 0x00, // Code
                 0x00, 0x00, // Checksum
                 0x00, 0x00, 0x00, 0x00, // Reserved
-                0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x02, 0x01, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                0x01, 0x01, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
             ];
 
-            let pkg = MutableRouterSolicitPacket::new(&mut data[..]).unwrap();
-            assert_eq!(pkg.get_icmpv6_type(), Icmpv6Types::RouterSolicit);
-            assert_eq!(pkg.get_icmpv6_code(), Icmpv6Code(0));
-            assert_eq!(pkg.get_checksum(), 0);
-            assert_eq!(pkg.get_reserved(), 0);
-            assert_eq!(pkg.get_options().len(), 2);
+            let pkt = Icmpv6Packet::new(&mut data[..]).unwrap();
+            assert_eq!(pkt.get_icmpv6_type(), Icmpv6Types::RouterSolicit);
+            assert_eq!(pkt.get_icmpv6_code(), Icmpv6Code(0));
+            assert_eq!(pkt.get_checksum(), 0);
 
-            let option = &pkg.get_options()[0];
+            let rs = RouterSolicitPacket::new(pkt.payload()).unwrap();
+            assert_eq!(rs.get_reserved(), 0);
+            assert_eq!(rs.get_options().len(), 2);
+
+            let option = &rs.get_options()[0];
             assert_eq!(option.option_type, NdpOptionTypes::TargetLLAddr);
             assert_eq!(option.length, 0x01);
-            assert_eq!(option.data, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-            assert_eq!(option.data.len(), 6);
+            assert_eq!(option.data, &[0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
 
-            let option = &pkg.get_options()[1];
+            let option = &rs.get_options()[1];
             assert_eq!(option.option_type, NdpOptionTypes::SourceLLAddr);
-            assert_eq!(option.length, 1);
-            assert_eq!(option.data, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+            assert_eq!(option.length, 0x01);
+            assert_eq!(option.data, &[0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b]);
         }
 
         #[test]
         fn basic_rs_create() {
-            let ref_packet = vec![
-                0x85, 0x00, 0x00, 0x00,
+            let ref_icmp_packet = vec![
+                0x85, 0x00, 0x00, 0x00
+            ];
+
+            let ref_rs_packet = vec![
                 0x00, 0x00, 0x00, 0x00,
                 0x01, 0x01, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00
             ];
-            let mut packet = [0u8; 16];
+
+            let mut icmp_packet = [0u8; 4];
+            let mut rs_packet = [0u8; 12];
+
             let options = vec![
                 NdpOption {
                     option_type: NdpOptionTypes::SourceLLAddr,
@@ -619,13 +600,18 @@ pub mod ndp {
                     data: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
                 }
             ];
+
             {
-                let mut rs_packet = MutableRouterSolicitPacket::new(&mut packet[..]).unwrap();
-                rs_packet.set_icmpv6_type(Icmpv6Types::RouterSolicit);
-                rs_packet.set_icmpv6_code(Icmpv6Code(0));
-                rs_packet.set_options(&options[..]);
+                let mut icmp = MutableIcmpv6Packet::new(&mut icmp_packet[..]).unwrap();
+                icmp.set_icmpv6_type(Icmpv6Types::RouterSolicit);
+                icmp.set_icmpv6_code(Icmpv6Code(0));
+                let mut rs = MutableRouterSolicitPacket::new(&mut rs_packet[..]).unwrap();
+                rs.set_options(&options[..]);
+                icmp.set_payload(rs.packet());
+                assert_eq!(ref_icmp_packet, icmp.packet())
             }
-            assert_eq!(&ref_packet[..], &packet[..]);
+            assert_eq!(&ref_icmp_packet[..], &icmp_packet[..]);
+            assert_eq!(&ref_rs_packet[..], &rs_packet[..]);
         }
 
         #[test]
@@ -642,23 +628,25 @@ pub mod ndp {
                 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source Link-Layer
                 0x05, 0x01, 0x00, 0x00, 0x57, 0x68, 0x61, 0x74 // MTU
             ];
-            let pkg = MutableRouterAdvertPacket::new(&mut data[..]).unwrap();
+            let pkg = Icmpv6Packet::new(&mut data[..]).unwrap();
             assert_eq!(pkg.get_icmpv6_type(), Icmpv6Types::RouterAdvert);
             assert_eq!(pkg.get_icmpv6_code(), Icmpv6Code(0));
             assert_eq!(pkg.get_checksum(), 0x00);
-            assert_eq!(pkg.get_hop_limit(), 0xff);
-            assert_eq!(pkg.get_flags(), RouterAdvertFlags::ManagedAddressConf);
-            assert_eq!(pkg.get_lifetime(), 0x900);
-            assert_eq!(pkg.get_reachable_time(), 0x12345678);
-            assert_eq!(pkg.get_retrans_time(), 0x87654321);
-            assert_eq!(pkg.get_options().len(), 2);
 
-            let option = &pkg.get_options()[0];
+            let ra = RouterAdvertPacket::new(pkg.payload()).unwrap();
+            assert_eq!(ra.get_hop_limit(), 0xff);
+            assert_eq!(ra.get_flags(), RouterAdvertFlags::ManagedAddressConf);
+            assert_eq!(ra.get_lifetime(), 0x900);
+            assert_eq!(ra.get_reachable_time(), 0x12345678);
+            assert_eq!(ra.get_retrans_time(), 0x87654321);
+            assert_eq!(ra.get_options().len(), 2);
+
+            let option = &ra.get_options()[0];
             assert_eq!(option.option_type, NdpOptionTypes::SourceLLAddr);
             assert_eq!(option.length, 1);
             assert_eq!(option.data, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
-            let option = &pkg.get_options()[1];
+            let option = &ra.get_options()[1];
             assert_eq!(option.option_type, NdpOptionTypes::MTU);
             assert_eq!(option.length, 1);
             assert_eq!(option.data, &[0x00, 0x00, 0x57, 0x68, 0x61, 0x74]);
@@ -666,15 +654,19 @@ pub mod ndp {
 
         #[test]
         fn basic_ra_create() {
-            let ref_packet = vec![
-                0x86, 0x00, 0x00, 0x00,
+            let ref_icmp_packet = vec![
+                0x86, 0x00, 0x00, 0x00
+            ];
+
+            let ref_ra_packet = vec![
                 0xff, 0x80, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
                 0x05, 0x01, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00
             ];
-            let mut packet = [0u8; 24];
+            let mut icmp_packet = [0u8; 4];
+            let mut ra_packet = [0u8; 20];
             let options = vec![
                 NdpOption {
                     option_type: NdpOptionTypes::MTU,
@@ -683,14 +675,16 @@ pub mod ndp {
                 }
             ];
             {
-                let mut ra_packet = MutableRouterAdvertPacket::new(&mut packet[..]).unwrap();
-                ra_packet.set_icmpv6_type(Icmpv6Types::RouterAdvert);
-                ra_packet.set_icmpv6_code(Icmpv6Code(0));
+                let mut icmp_packet = MutableIcmpv6Packet::new(&mut icmp_packet[..]).unwrap();
+                icmp_packet.set_icmpv6_type(Icmpv6Types::RouterAdvert);
+                icmp_packet.set_icmpv6_code(Icmpv6Code(0));
+                let mut ra_packet = MutableRouterAdvertPacket::new(&mut ra_packet[..]).unwrap();
                 ra_packet.set_hop_limit(0xff);
                 ra_packet.set_flags(RouterAdvertFlags::ManagedAddressConf);
                 ra_packet.set_options(&options[..]);
             }
-            assert_eq!(&ref_packet[..], &packet[..]);
+            assert_eq!(&ref_icmp_packet[..], &icmp_packet[..]);
+            assert_eq!(&ref_ra_packet[..], &ra_packet[..]);
         }
 
         #[test]
@@ -703,32 +697,39 @@ pub mod ndp {
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x01
             ];
-            let pkg = MutableNeighborSolicitPacket::new(&mut data[..]).unwrap();
+            let pkg = Icmpv6Packet::new(&mut data[..]).unwrap();
             assert_eq!(pkg.get_icmpv6_type(), Icmpv6Types::NeighborSolicit);
             assert_eq!(pkg.get_icmpv6_code(), Icmpv6Code(0));
             assert_eq!(pkg.get_checksum(), 0x00);
-            assert_eq!(pkg.get_reserved(), 0x00);
-            assert_eq!(pkg.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+            let ns = NeighborSolicitPacket::new(pkg.payload()).unwrap();
+            assert_eq!(ns.get_reserved(), 0x00);
+            assert_eq!(ns.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
         }
 
         #[test]
         fn basic_ns_create() {
-            let ref_packet = vec![
-                0x87, 0x00, 0x00, 0x00,
+            let ref_icmp_packet = vec![
+                0x87, 0x00, 0x00, 0x00
+            ];
+
+            let ref_ns_packet = vec![
                 0x00, 0x00, 0x00, 0x00,
                 0xff, 0x02, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x01,
+                0x00, 0x00, 0x00, 0x01
             ];
-            let mut packet = [0u8; 24];
+            let mut icmp_packet = [0u8; 4];
+            let mut ns_packet = [0u8; 20];
             {
-                let mut ns_packet = MutableNeighborSolicitPacket::new(&mut packet[..]).unwrap();
-                ns_packet.set_icmpv6_type(Icmpv6Types::NeighborSolicit);
-                ns_packet.set_icmpv6_code(Icmpv6Code(0));
-                ns_packet.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+                let mut icmp = MutableIcmpv6Packet::new(&mut icmp_packet[..]).unwrap();
+                icmp.set_icmpv6_type(Icmpv6Types::NeighborSolicit);
+                icmp.set_icmpv6_code(Icmpv6Code(0));
+                let mut ns = MutableNeighborSolicitPacket::new(&mut ns_packet[..]).unwrap();
+                ns.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
             }
-            assert_eq!(&ref_packet[..], &packet[..]);
+            assert_eq!(&ref_icmp_packet[..], &icmp_packet[..]);
+            assert_eq!(&ref_ns_packet[..], &ns_packet[..]);
         }
 
         #[test]
@@ -741,34 +742,40 @@ pub mod ndp {
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x01
             ];
-            let pkg = MutableNeighborAdvertPacket::new(&mut data[..]).unwrap();
+            let pkg = Icmpv6Packet::new(&mut data[..]).unwrap();
             assert_eq!(pkg.get_icmpv6_type(), Icmpv6Types::NeighborAdvert);
             assert_eq!(pkg.get_icmpv6_code(), Icmpv6Code(0));
             assert_eq!(pkg.get_checksum(), 0x00);
-            assert_eq!(pkg.get_reserved(), 0x00);
-            assert_eq!(pkg.get_flags(), 0x80);
-            assert_eq!(pkg.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+            let na = NeighborAdvertPacket::new(pkg.payload()).unwrap();
+            assert_eq!(na.get_reserved(), 0x00);
+            assert_eq!(na.get_flags(), 0x80);
+            assert_eq!(na.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
         }
 
         #[test]
         fn basic_na_create() {
-            let ref_packet = vec![
-                0x88, 0x00, 0x00, 0x00,
+            let ref_icmp_packet = vec![
+                0x88, 0x00, 0x00, 0x00
+            ];
+            let ref_na_packet = vec![
                 0x80, 0x00, 0x00, 0x00,
                 0xff, 0x02, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x01,
+                0x00, 0x00, 0x00, 0x01
             ];
-            let mut packet = [0u8; 24];
+            let mut icmp_packet = [0u8; 4];
+            let mut na_packet = [0u8; 20];
             {
-                let mut na_packet = MutableNeighborAdvertPacket::new(&mut packet[..]).unwrap();
-                na_packet.set_icmpv6_type(Icmpv6Types::NeighborAdvert);
-                na_packet.set_icmpv6_code(Icmpv6Code(0));
-                na_packet.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
-                na_packet.set_flags(NeighborAdvertFlags::Router);
+                let mut icmp = MutableIcmpv6Packet::new(&mut icmp_packet[..]).unwrap();
+                icmp.set_icmpv6_type(Icmpv6Types::NeighborAdvert);
+                icmp.set_icmpv6_code(Icmpv6Code(0));
+                let mut na = MutableNeighborAdvertPacket::new(&mut na_packet[..]).unwrap();
+                na.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+                na.set_flags(NeighborAdvertFlags::Router);
             }
-            assert_eq!(&ref_packet[..], &packet[..]);
+            assert_eq!(&ref_icmp_packet[..], &icmp_packet[..]);
+            assert_eq!(&ref_na_packet[..], &na_packet[..]);
         }
 
         #[test]
@@ -785,19 +792,23 @@ pub mod ndp {
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
             ];
-            let pkg = MutableRedirectPacket::new(&mut data[..]).unwrap();
+            let pkg = Icmpv6Packet::new(&mut data[..]).unwrap();
             assert_eq!(pkg.get_icmpv6_type(), Icmpv6Types::Redirect);
             assert_eq!(pkg.get_icmpv6_code(), Icmpv6Code(0));
             assert_eq!(pkg.get_checksum(), 0x00);
-            assert_eq!(pkg.get_reserved(), 0x00);
-            assert_eq!(pkg.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
-            assert_eq!(pkg.get_dest_addr(), Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0));
+            let redirect = RedirectPacket::new(pkg.payload()).unwrap();
+            assert_eq!(redirect.get_reserved(), 0x00);
+            assert_eq!(redirect.get_target_addr(), Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+            assert_eq!(redirect.get_dest_addr(), Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0));
         }
 
         #[test]
         fn basic_redirect_create() {
-            let ref_packet = vec![
-                0x89, 0x00, 0x00, 0x00,
+            let ref_icmp_packet = vec![
+                0x89, 0x00, 0x00, 0x00
+            ];
+
+            let ref_rdr_packet = vec![
                 0x00, 0x00, 0x00, 0x00,
                 0xff, 0x02, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
@@ -808,15 +819,18 @@ pub mod ndp {
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
             ];
-            let mut packet = [0u8; 40];
+            let mut icmp_packet = [0u8; 4];
+            let mut rdr_packet = [0u8; 36];
             {
-                let mut rdr_packet = MutableRedirectPacket::new(&mut packet[..]).unwrap();
-                rdr_packet.set_icmpv6_type(Icmpv6Types::Redirect);
-                rdr_packet.set_icmpv6_code(Icmpv6Code(0));
-                rdr_packet.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
-                rdr_packet.set_dest_addr(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0));
+                let mut icmp = MutableIcmpv6Packet::new(&mut icmp_packet[..]).unwrap();
+                icmp.set_icmpv6_type(Icmpv6Types::Redirect);
+                icmp.set_icmpv6_code(Icmpv6Code(0));
+                let mut rdr = MutableRedirectPacket::new(&mut rdr_packet[..]).unwrap();
+                rdr.set_target_addr(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1));
+                rdr.set_dest_addr(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0));
             }
-            assert_eq!(&ref_packet[..], &packet[..]);
+            assert_eq!(&ref_icmp_packet[..], &icmp_packet[..]);
+            assert_eq!(&ref_rdr_packet[..], &rdr_packet[..]);
         }
     }
 }
